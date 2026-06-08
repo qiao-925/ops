@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# ops — 从任意目录执行，管理所有仓库 + Claude 会话同步
+set -euo pipefail
+
+OPS_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.."
+SESSION_SYNC="$OPS_DIR/../claude-session-sync"
+LOG_FILE="$OPS_DIR/.sync.log"
+CLONE_FASTER_URL="https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py"
+
+usage() {
+	cat <<EOF
+用法: ops <command>
+
+命令:
+  install  安装全局环境（首次换设备执行）
+  sync     同步所有仓库 + Claude 会话
+  status   查看同步状态、时间、历史
+  log      查看完整同步日志
+EOF
+}
+
+cmd_sync() {
+	local start_ts end_ts
+	start_ts=$(date +%s)
+
+	echo "=== $(date '+%F %T') 同步开始 ==="
+	echo "sync-start: $start_ts" >> "$LOG_FILE"
+	echo ""
+
+	# 1/2 仓库同步
+	echo "--- 1/2 仓库同步 ---"
+	local repo_exit=0
+	curl -fsSL "$CLONE_FASTER_URL" | python3 - || repo_exit=$?
+	echo "[repo] $(date '+%F %T') exit=$repo_exit" >> "$LOG_FILE"
+
+	echo ""
+
+	# 2/2 Claude 会话同步
+	echo "--- 2/2 Claude 会话同步 ---"
+	local session_exit=0
+	if [ -d "$SESSION_SYNC" ]; then
+		make -C "$SESSION_SYNC" sync || session_exit=$?
+	else
+		echo "  [警告] 未找到 claude-session-sync 目录"
+		session_exit=1
+	fi
+	echo "[session] $(date '+%F %T') exit=$session_exit" >> "$LOG_FILE"
+
+	echo ""
+	echo "=== 同步完成 ($(date '+%F %T')) ==="
+
+	end_ts=$(date +%s)
+	echo "sync-end: $end_ts" >> "$LOG_FILE"
+	echo "耗时: $((end_ts - start_ts)) 秒"
+}
+
+cmd_status() {
+	echo "===== 同步状态 ====="
+	echo ""
+
+	# 最近同步记录
+	echo "--- 最近同步记录 ---"
+	if [ -s "$LOG_FILE" ]; then
+		tail -15 "$LOG_FILE"
+	else
+		echo "(暂无记录，执行 ops sync 后生成)"
+	fi
+	echo ""
+
+	# 同步摘要
+	echo "--- 同步摘要 ---"
+	if [ -s "$LOG_FILE" ]; then
+		local last_end last_start now ago ago_str
+		last_end=$(grep 'sync-end' "$LOG_FILE" | tail -1 | cut -d' ' -f2)
+		last_start=$(grep 'sync-start' "$LOG_FILE" | tail -1 | cut -d' ' -f2)
+		now=$(date +%s)
+
+		if [ -n "$last_end" ]; then
+			ago=$((now - last_end))
+			if [ "$ago" -lt 60 ]; then
+				ago_str="${ago}秒"
+			elif [ "$ago" -lt 3600 ]; then
+				ago_str="$((ago / 60))分"
+			else
+				ago_str="$((ago / 3600))时$(((ago % 3600) / 60))分"
+			fi
+			echo "  上次同步完成: $(date -d "@$last_end" '+%F %T') (${ago_str}前)"
+			if [ -n "$last_start" ]; then
+				echo "  耗时: $((last_end - last_start))秒"
+			fi
+		else
+			local start_ts
+			start_ts=$(grep 'sync-start' "$LOG_FILE" | tail -1 | cut -d' ' -f2)
+			if [ -n "$start_ts" ]; then
+				echo "  上次同步未完成 (开始于 $(date -d "@$start_ts" '+%F %T'))"
+			fi
+		fi
+		echo "  总同步次数: $(grep -c 'sync-start' "$LOG_FILE")"
+	fi
+	echo ""
+
+	# Claude 会话统计
+	echo "--- Claude 会话统计 ---"
+	if [ -d "$SESSION_SYNC" ]; then
+		make -s -C "$SESSION_SYNC" status 2>/dev/null || echo "(无法获取)"
+	else
+		echo "(未找到 claude-session-sync)"
+	fi
+	echo ""
+
+	# 会话仓库最近提交
+	if [ -d "$SESSION_SYNC" ]; then
+		echo "--- 会话仓库最近提交 ---"
+		git -C "$SESSION_SYNC" log --oneline -3 2>/dev/null || echo "(无提交)"
+	fi
+}
+
+cmd_log() {
+	if [ -s "$LOG_FILE" ]; then
+		cat "$LOG_FILE"
+	else
+		echo "(空)"
+	fi
+}
+
+cmd_install() {
+	local bin_link="$HOME/.local/bin/ops"
+	local session_repo="git@github.com:qiao-925/claude-session-sync.git"
+
+	echo "=== ops 全局环境安装 ==="
+	echo ""
+
+	# 确保 ~/.local/bin 存在
+	mkdir -p "$HOME/.local/bin"
+
+	# 全局命令链接
+	if [ -L "$bin_link" ]; then
+		echo "[ok] ops 链接已存在"
+	else
+		ln -sf "$OPS_DIR/bin/ops" "$bin_link"
+		echo "[ok] 创建链接 $bin_link -> $OPS_DIR/bin/ops"
+	fi
+
+	echo ""
+
+	# 确保 ~/.local/bin 在 PATH
+	if echo "$PATH" | tr ':' '\n' | grep -qF "$HOME/.local/bin"; then
+		echo "[ok] ~/.local/bin 已在 PATH"
+	else
+		echo '[!!] 请将 export PATH="$HOME/.local/bin:$PATH" 加入 ~/.bashrc'
+	fi
+
+	echo ""
+
+	# Claude 会话同步仓库
+	if [ -d "$SESSION_SYNC" ]; then
+		echo "[ok] claude-session-sync 已存在"
+	else
+		git clone "$session_repo" "$SESSION_SYNC"
+		echo "[ok] 克隆 claude-session-sync"
+	fi
+
+	echo ""
+
+	# 会话同步 cron
+	make -C "$SESSION_SYNC" cron-install
+
+	echo ""
+	echo "=== 安装完成 ==="
+	echo "现在可以从任意目录执行: ops sync / ops status"
+}
+
+# --- 入口 ---
+case "${1:-help}" in
+install) cmd_install ;;
+sync)    cmd_sync ;;
+status)  cmd_status ;;
+log)     cmd_log ;;
+help|*)  usage ;;
+esac
