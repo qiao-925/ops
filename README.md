@@ -14,7 +14,6 @@ make install
 这会完成：
 - 创建 `~/.local/bin/ops` 全局命令链接
 - 确保 `~/.local/bin` 在 PATH 中
-- 克隆并安装 `claude-session-sync` 会话同步仓库及其 cron 定时任务
 
 ## 用法
 
@@ -39,15 +38,18 @@ make help    # 等同于 ops help
 ### 架构
 
 ```
-make sync
+ops sync
  ├── 1/2 仓库同步
- │    └── curl clone_faster.py | python3 -    # 拉取 58 个仓库最新代码
+ │    └── curl clone_faster.py | python3 - --output ~/.local/share/ops/repos
+ │        ├── git clone --depth 1 (首次)
+ │        └── git fetch --depth 1   (后续增量)
  └── 2/2 Claude 会话同步
-      └── make -C ../claude-session-sync sync  # 双向同步 ~/.claude/projects/
+      └── make -C ~/.local/share/ops/repos/qiao-925/claude-session-sync sync
            ├── git pull --rebase
-           ├── cp -ru LOCAL → HUB
-           ├── cp -ru HUB → LOCAL
+           ├── cp -ru 双向同步 ~/.claude/projects/
            └── git commit + push (有变化时)
 ```
+
+仓库数据统一存放在 `~/.local/share/ops/repos/`，可通过 `OPS_SYNC_DIR` 环境变量自定义。
 
 同步日志记录在 `.sync.log`，包含每次的开始/结束时间和各步骤退出码。

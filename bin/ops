@@ -3,9 +3,9 @@
 set -euo pipefail
 
 OPS_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.."
-SESSION_SYNC="$OPS_DIR/../claude-session-sync"
 LOG_FILE="$OPS_DIR/.sync.log"
 CLONE_FASTER_URL="https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py"
+SYNC_DIR="${OPS_SYNC_DIR:-$HOME/.local/share/ops/repos}"
 
 usage() {
 	cat <<EOF
@@ -16,6 +16,9 @@ usage() {
   sync     同步所有仓库 + Claude 会话
   status   查看同步状态、时间、历史
   log      查看完整同步日志
+
+环境变量:
+  OPS_SYNC_DIR  仓库同步目录（默认 $HOME/.local/share/ops/repos）
 EOF
 }
 
@@ -29,8 +32,9 @@ cmd_sync() {
 
 	# 1/2 仓库同步
 	echo "--- 1/2 仓库同步 ---"
+	echo "  同步目录: $SYNC_DIR"
 	local repo_exit=0
-	curl -fsSL "$CLONE_FASTER_URL" | python3 - || repo_exit=$?
+	curl -fsSL "$CLONE_FASTER_URL" | python3 - --output "$SYNC_DIR" || repo_exit=$?
 	echo "[repo] $(date '+%F %T') exit=$repo_exit" >> "$LOG_FILE"
 
 	echo ""
@@ -38,10 +42,11 @@ cmd_sync() {
 	# 2/2 Claude 会话同步
 	echo "--- 2/2 Claude 会话同步 ---"
 	local session_exit=0
-	if [ -d "$SESSION_SYNC" ]; then
-		make -C "$SESSION_SYNC" sync || session_exit=$?
+	local session_dir="$SYNC_DIR/qiao-925/claude-session-sync"
+	if [ -d "$session_dir" ]; then
+		make -C "$session_dir" sync || session_exit=$?
 	else
-		echo "  [警告] 未找到 claude-session-sync 目录"
+		echo "  [跳过] claude-session-sync 未克隆到同步目录"
 		session_exit=1
 	fi
 	echo "[session] $(date '+%F %T') exit=$session_exit" >> "$LOG_FILE"
@@ -101,17 +106,18 @@ cmd_status() {
 
 	# Claude 会话统计
 	echo "--- Claude 会话统计 ---"
-	if [ -d "$SESSION_SYNC" ]; then
-		make -s -C "$SESSION_SYNC" status 2>/dev/null || echo "(无法获取)"
+	local session_dir="$SYNC_DIR/qiao-925/claude-session-sync"
+	if [ -d "$session_dir" ]; then
+		make -s -C "$session_dir" status 2>/dev/null || echo "(无法获取)"
 	else
-		echo "(未找到 claude-session-sync)"
+		echo "(claude-session-sync 未克隆)"
 	fi
 	echo ""
 
 	# 会话仓库最近提交
-	if [ -d "$SESSION_SYNC" ]; then
+	if [ -d "$session_dir" ]; then
 		echo "--- 会话仓库最近提交 ---"
-		git -C "$SESSION_SYNC" log --oneline -3 2>/dev/null || echo "(无提交)"
+		git -C "$session_dir" log --oneline -3 2>/dev/null || echo "(无提交)"
 	fi
 }
 
@@ -125,9 +131,8 @@ cmd_log() {
 
 cmd_install() {
 	local bin_link="$HOME/.local/bin/ops"
-	local session_repo="git@github.com:qiao-925/claude-session-sync.git"
 
-	echo "=== ops 全局环境安装 ==="
+	echo "=== ops 全局安装 ==="
 	echo ""
 
 	# 确保 ~/.local/bin 存在
@@ -143,27 +148,18 @@ cmd_install() {
 
 	echo ""
 
+	# 仓库同步目录
+	mkdir -p "$SYNC_DIR"
+	echo "[ok] 同步目录 $SYNC_DIR"
+
+	echo ""
+
 	# 确保 ~/.local/bin 在 PATH
 	if echo "$PATH" | tr ':' '\n' | grep -qF "$HOME/.local/bin"; then
 		echo "[ok] ~/.local/bin 已在 PATH"
 	else
 		echo '[!!] 请将 export PATH="$HOME/.local/bin:$PATH" 加入 ~/.bashrc'
 	fi
-
-	echo ""
-
-	# Claude 会话同步仓库
-	if [ -d "$SESSION_SYNC" ]; then
-		echo "[ok] claude-session-sync 已存在"
-	else
-		git clone "$session_repo" "$SESSION_SYNC"
-		echo "[ok] 克隆 claude-session-sync"
-	fi
-
-	echo ""
-
-	# 会话同步 cron
-	make -C "$SESSION_SYNC" cron-install
 
 	echo ""
 	echo "=== 安装完成 ==="
