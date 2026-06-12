@@ -16,15 +16,13 @@ curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.sh | bash
 - 创建 `~/.local/bin/ops` 全局命令链接
 - 确保 `~/.local/bin` 在 PATH 中
 
-> 如在项目目录本地开发，也可用 `make install`
+> curl | bash 是分发层——不需要理解内部，执行即完成。
 
 ## 卸载
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/uninstall.sh | bash
 ```
-
-> 如在项目目录，也可用 `make uninstall`
 
 ## 用法
 
