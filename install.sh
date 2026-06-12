@@ -2,7 +2,7 @@
 # ops 一键安装 — curl -fsSL <url>/install.sh | bash
 set -euo pipefail
 
-REPO_URL="git@github.com:qiao-925/ops.git"
+REPO="qiao-925/ops"
 OPS_DIR="$HOME/.local/share/ops"
 BIN_LINK="$HOME/.local/bin/ops"
 
@@ -14,7 +14,7 @@ if [ -d "$OPS_DIR" ]; then
     echo "[ok] ops 仓库已存在"
 else
     mkdir -p "$(dirname "$OPS_DIR")"
-    git clone "$REPO_URL" "$OPS_DIR"
+    gh repo clone "$REPO" "$OPS_DIR"
     echo "[ok] 克隆 ops 仓库"
 fi
 
