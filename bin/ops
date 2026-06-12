@@ -12,10 +12,12 @@ usage() {
 用法: ops <command>
 
 命令:
-  install  安装全局环境（首次换设备执行）
-  sync     同步所有仓库 + Claude 会话
-  status   查看同步状态、时间、历史
-  log      查看完整同步日志
+  sync       同步所有仓库 + Claude 会话
+  status     查看同步状态、时间、历史
+  log        查看完整同步日志
+
+安装/卸载:
+  make install / make uninstall
 
 环境变量:
   OPS_SYNC_DIR  仓库同步目录（默认 $HOME/.local/share/ops/repos）
@@ -129,48 +131,10 @@ cmd_log() {
 	fi
 }
 
-cmd_install() {
-	local bin_link="$HOME/.local/bin/ops"
-
-	echo "=== ops 全局安装 ==="
-	echo ""
-
-	# 确保 ~/.local/bin 存在
-	mkdir -p "$HOME/.local/bin"
-
-	# 全局命令链接
-	if [ -L "$bin_link" ]; then
-		echo "[ok] ops 链接已存在"
-	else
-		ln -sf "$OPS_DIR/bin/ops" "$bin_link"
-		echo "[ok] 创建链接 $bin_link -> $OPS_DIR/bin/ops"
-	fi
-
-	echo ""
-
-	# 仓库同步目录
-	mkdir -p "$SYNC_DIR"
-	echo "[ok] 同步目录 $SYNC_DIR"
-
-	echo ""
-
-	# 确保 ~/.local/bin 在 PATH
-	if echo "$PATH" | tr ':' '\n' | grep -qF "$HOME/.local/bin"; then
-		echo "[ok] ~/.local/bin 已在 PATH"
-	else
-		echo '[!!] 请将 export PATH="$HOME/.local/bin:$PATH" 加入 ~/.bashrc'
-	fi
-
-	echo ""
-	echo "=== 安装完成 ==="
-	echo "现在可以从任意目录执行: ops sync / ops status"
-}
-
 # --- 入口 ---
 case "${1:-help}" in
-install) cmd_install ;;
-sync)    cmd_sync ;;
-status)  cmd_status ;;
-log)     cmd_log ;;
-help|*)  usage ;;
+sync)       cmd_sync ;;
+status)     cmd_status ;;
+log)        cmd_log ;;
+help|*)     usage ;;
 esac

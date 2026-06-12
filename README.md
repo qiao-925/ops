@@ -5,15 +5,26 @@
 
 ## 安装
 
-首次使用需在项目目录执行一次安装：
+一行命令，无需 clone 仓库：
 
 ```bash
-make install
+curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.sh | bash
 ```
 
 这会完成：
+- 克隆 ops 仓库到 `~/.local/share/ops`
 - 创建 `~/.local/bin/ops` 全局命令链接
 - 确保 `~/.local/bin` 在 PATH 中
+
+> 如在项目目录本地开发，也可用 `make install`
+
+## 卸载
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/uninstall.sh | bash
+```
+
+> 如在项目目录，也可用 `make uninstall`
 
 ## 用法
 
@@ -24,15 +35,6 @@ ops sync     # 仓库更新 + Claude 会话同步
 ops status   # 查看同步状态、记录、统计
 ops log      # 查看完整同步日志
 ops help     # 查看帮助
-```
-
-所有 `ops` 命令也可在项目目录通过 Makefile 调用：
-
-```bash
-make sync    # 等同于 ops sync
-make status  # 等同于 ops status
-make log     # 等同于 ops log
-make help    # 等同于 ops help
 ```
 
 ### 架构
