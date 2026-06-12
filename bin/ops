@@ -17,7 +17,8 @@ usage() {
   log        查看完整同步日志
 
 安装/卸载:
-  make install / make uninstall
+  curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/uninstall.sh | bash
 
 环境变量:
   OPS_SYNC_DIR  仓库同步目录（默认 $HOME/.local/share/ops/repos）
@@ -25,7 +26,7 @@ EOF
 }
 
 cmd_sync() {
-	local start_ts end_ts
+	local start_ts end_ts repo_out session_out
 	start_ts=$(date +%s)
 
 	echo "=== $(date '+%F %T') 同步开始 ==="
@@ -36,8 +37,12 @@ cmd_sync() {
 	echo "--- 1/2 仓库同步 ---"
 	echo "  同步目录: $SYNC_DIR"
 	local repo_exit=0
-	curl -fsSL "$CLONE_FASTER_URL" | python3 - --output "$SYNC_DIR" || repo_exit=$?
-	echo "[repo] $(date '+%F %T') exit=$repo_exit" >> "$LOG_FILE"
+	repo_out=$(curl -fsSL "$CLONE_FASTER_URL" | python3 - --output "$SYNC_DIR" 2>&1) || repo_exit=$?
+	echo "$repo_out"
+	# 从输出提取仓库数量
+	local repo_count
+	repo_count=$(echo "$repo_out" | grep -oP '\d+(?= 个仓库)' || echo "0")
+	echo "[repo] $(date '+%F %T') exit=$repo_exit repos=$repo_count" >> "$LOG_FILE"
 
 	echo ""
 
@@ -46,19 +51,25 @@ cmd_sync() {
 	local session_exit=0
 	local session_dir="$SYNC_DIR/qiao-925/claude-session-sync"
 	if [ -d "$session_dir" ]; then
-		make -C "$session_dir" sync || session_exit=$?
+		session_out=$(make -C "$session_dir" sync 2>&1) || session_exit=$?
+		echo "$session_out"
+		# 提取同步详情
+		local synced_files
+		synced_files=$(echo "$session_out" | grep -oP '\d+(?= 个文件更新)' || echo "0")
+		echo "[session] $(date '+%F %T') exit=$session_exit files=$synced_files" >> "$LOG_FILE"
 	else
 		echo "  [跳过] claude-session-sync 未克隆到同步目录"
 		session_exit=1
+		echo "[session] $(date '+%F %T') exit=1 reason=not_found" >> "$LOG_FILE"
 	fi
-	echo "[session] $(date '+%F %T') exit=$session_exit" >> "$LOG_FILE"
 
 	echo ""
 	echo "=== 同步完成 ($(date '+%F %T')) ==="
 
 	end_ts=$(date +%s)
-	echo "sync-end: $end_ts" >> "$LOG_FILE"
-	echo "耗时: $((end_ts - start_ts)) 秒"
+	local duration=$((end_ts - start_ts))
+	echo "sync-end: $end_ts duration=${duration}s" >> "$LOG_FILE"
+	echo "耗时: ${duration} 秒"
 }
 
 cmd_status() {
@@ -68,7 +79,7 @@ cmd_status() {
 	# 最近同步记录
 	echo "--- 最近同步记录 ---"
 	if [ -s "$LOG_FILE" ]; then
-		tail -15 "$LOG_FILE"
+		tail -20 "$LOG_FILE"
 	else
 		echo "(暂无记录，执行 ops sync 后生成)"
 	fi
@@ -78,7 +89,7 @@ cmd_status() {
 	echo "--- 同步摘要 ---"
 	if [ -s "$LOG_FILE" ]; then
 		local last_end last_start now ago ago_str
-		last_end=$(grep 'sync-end' "$LOG_FILE" | tail -1 | cut -d' ' -f2)
+		last_end=$(grep 'sync-end' "$LOG_FILE" | tail -1 | grep -oP 'sync-end: \K\d+')
 		last_start=$(grep 'sync-start' "$LOG_FILE" | tail -1 | cut -d' ' -f2)
 		now=$(date +%s)
 
@@ -103,6 +114,13 @@ cmd_status() {
 			fi
 		fi
 		echo "  总同步次数: $(grep -c 'sync-start' "$LOG_FILE")"
+
+		# 最近同步的仓库数量
+		local last_repos
+		last_repos=$(grep '\[repo\]' "$LOG_FILE" | tail -1 | grep -oP 'repos=\K\d+' || echo "")
+		if [ -n "$last_repos" ] && [ "$last_repos" != "0" ]; then
+			echo "  最近同步仓库数: $last_repos"
+		fi
 	fi
 	echo ""
 
