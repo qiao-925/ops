@@ -26,8 +26,9 @@ EOF
 }
 
 cmd_sync() {
-	local start_ts end_ts repo_out session_out
+	local start_ts end_ts tmpfile
 	start_ts=$(date +%s)
+	tmpfile=$(mktemp)
 
 	echo "=== $(date '+%F %T') 同步开始 ==="
 	echo "sync-start: $start_ts" >> "$LOG_FILE"
@@ -37,11 +38,10 @@ cmd_sync() {
 	echo "--- 1/2 仓库同步 ---"
 	echo "  同步目录: $SYNC_DIR"
 	local repo_exit=0
-	repo_out=$(curl -fsSL "$CLONE_FASTER_URL" | python3 - --output "$SYNC_DIR" 2>&1) || repo_exit=$?
-	echo "$repo_out"
+	curl -fsSL "$CLONE_FASTER_URL" | python3 - --output "$SYNC_DIR" 2>&1 | tee "$tmpfile" || repo_exit=$?
 	# 从输出提取仓库数量
 	local repo_count
-	repo_count=$(echo "$repo_out" | grep -oP '\d+(?= 个仓库)' || echo "0")
+	repo_count=$(grep -oP '\d+(?= 个仓库)' "$tmpfile" || echo "0")
 	echo "[repo] $(date '+%F %T') exit=$repo_exit repos=$repo_count" >> "$LOG_FILE"
 
 	echo ""
@@ -51,17 +51,18 @@ cmd_sync() {
 	local session_exit=0
 	local session_dir="$SYNC_DIR/qiao-925/claude-session-sync"
 	if [ -d "$session_dir" ]; then
-		session_out=$(make -C "$session_dir" sync 2>&1) || session_exit=$?
-		echo "$session_out"
+		make -C "$session_dir" sync 2>&1 | tee "$tmpfile" || session_exit=$?
 		# 提取同步详情
 		local synced_files
-		synced_files=$(echo "$session_out" | grep -oP '\d+(?= 个文件更新)' || echo "0")
+		synced_files=$(grep -oP '\d+(?= 个文件更新)' "$tmpfile" || echo "0")
 		echo "[session] $(date '+%F %T') exit=$session_exit files=$synced_files" >> "$LOG_FILE"
 	else
 		echo "  [跳过] claude-session-sync 未克隆到同步目录"
 		session_exit=1
 		echo "[session] $(date '+%F %T') exit=1 reason=not_found" >> "$LOG_FILE"
 	fi
+
+	rm -f "$tmpfile"
 
 	echo ""
 	echo "=== 同步完成 ($(date '+%F %T')) ==="
