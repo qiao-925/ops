@@ -1,7 +1,7 @@
 
 # ops
 
-任务聚合平台 — 一个命令执行所有子任务，纯透传。
+任务聚合平台 — 三个字母，执行所有子任务。
 
 ## 安装 / 重装
 
@@ -14,22 +14,19 @@ curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.py | pyth
 ## 用法
 
 ```bash
-ops sync     # 执行所有子任务的同步命令
-ops status   # 执行所有子任务的状态命令
+ops
 ```
-
-`ops sync` 等于你手动依次执行每个子任务的同步命令，输出完全一致。
 
 ## 新增任务
 
-在 `bin/ops` 中加两个函数 + 注册到数组：
+在 `bin/ops` 的 `COMMANDS` 数组中加一行：
 
 ```bash
-mytask_sync()   { some-cli sync; }
-mytask_status() { some-cli status; }
-
-SYNC_TASKS=(repo_sync session_sync mytask_status)
-STATUS_TASKS=(repo_status session_status mytask_status)
+COMMANDS=(
+    "curl .../clone_faster.py | python3 - --output $SYNC_DIR"
+    "make -C .../claude-session-sync sync"
+    "curl .../new_task.py | python3 -"     # ← 加这里
+)
 ```
 
 ## 目录
