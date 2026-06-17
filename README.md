@@ -1,7 +1,7 @@
 
 # ops
 
-个人运维集成面板 — 一个命令调度所有运维任务。
+任务聚合平台 — 一个命令执行所有子任务，纯透传。
 
 ## 安装 / 重装
 
@@ -14,19 +14,23 @@ curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.py | pyth
 ## 用法
 
 ```bash
-ops sync     # 同步所有仓库 + Claude 会话
-ops status   # 查看同步状态
+ops sync     # 执行所有子任务的同步命令
+ops status   # 执行所有子任务的状态命令
 ```
 
-## 架构
+`ops sync` 等于你手动依次执行每个子任务的同步命令，输出完全一致。
 
-```
-ops sync
- ├── 1. 仓库同步 (clone-faster)     ← 必须先完成
- └── 2. Claude 会话同步 (claude-session-sync)
-```
+## 新增任务
 
-所有任务通过 subprocess 调用外部 CLI，零代码依赖。
+在 `bin/ops` 中加两个函数 + 注册到数组：
+
+```bash
+mytask_sync()   { some-cli sync; }
+mytask_status() { some-cli status; }
+
+SYNC_TASKS=(repo_sync session_sync mytask_status)
+STATUS_TASKS=(repo_status session_status mytask_status)
+```
 
 ## 目录
 

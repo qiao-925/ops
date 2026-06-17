@@ -1,104 +1,41 @@
-#!/usr/bin/env python3
-"""ops — 个人运维集成面板"""
+#!/usr/bin/env bash
+# ops — 任务聚合平台，纯透传
+set -euo pipefail
 
-import subprocess
-import sys
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
+SYNC_DIR="${OPS_SYNC_DIR:-$HOME/.local/share/repos}"
 
-SYNC_DIR = Path.home() / ".local" / "share" / "repos"
-CLONE_FASTER_URL = "https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py"
+# --- 任务定义 (新增任务在这里加函数) ---
 
+repo_sync()     { curl -fsSL https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py | python3 - --output "$SYNC_DIR"; }
+repo_status()   { echo "$SYNC_DIR ($(ls "$SYNC_DIR" 2>/dev/null | wc -l) 个条目)"; }
 
-def task_repo_sync() -> tuple[bool, str]:
-    print("  [repo-sync] 开始...")
-    proc = subprocess.run(
-        ["bash", "-c", f'curl -fsSL "{CLONE_FASTER_URL}" | python3 - --output "{SYNC_DIR}"'],
-        capture_output=True, text=True,
-    )
-    summary = proc.stdout.strip().split("\n")[-1] if proc.stdout.strip() else ""
-    ok = proc.returncode == 0
-    print(f"  [repo-sync] {'✓' if ok else '✗'} {summary or ('完成' if ok else f'失败 exit={proc.returncode}')}")
-    return ok, summary
+session_sync()  { make -C "$SYNC_DIR/claude-session-sync" sync; }
+session_status(){ make -s -C "$SYNC_DIR/claude-session-sync" status; }
 
+# --- 任务注册 ---
+SYNC_TASKS=(repo_sync session_sync)
+STATUS_TASKS=(repo_status session_status)
 
-def task_session_sync() -> tuple[bool, str]:
-    session_dir = SYNC_DIR / "claude-session-sync"
-    if not session_dir.exists():
-        print("  [session-sync] ✗ claude-session-sync 未克隆")
-        return False, "未克隆"
+# --- 执行 ---
 
-    print("  [session-sync] 开始...")
-    proc = subprocess.run(
-        ["make", "sync"],
-        cwd=str(session_dir),
-        capture_output=True, text=True,
-    )
-    output = proc.stderr.strip() or proc.stdout.strip()
-    summary = ""
-    for line in output.split("\n"):
-        if any(kw in line.lower() for kw in ["同步", "sync", "commit", "push", "already up to date"]):
-            summary = line.strip()
-            break
+cmd_sync() {
+    for fn in "${SYNC_TASKS[@]}"; do
+        echo "=== ${fn%_*}-sync ==="
+        $fn
+        echo ""
+    done
+}
 
-    ok = proc.returncode == 0
-    print(f"  [session-sync] {'✓' if ok else '✗'} {summary or ('完成' if ok else f'失败 exit={proc.returncode}')}")
-    return ok, summary
+cmd_status() {
+    for fn in "${STATUS_TASKS[@]}"; do
+        echo "--- ${fn%_*} ---"
+        $fn
+        echo ""
+    done
+}
 
-
-def cmd_sync() -> None:
-    print(f"=== {time.strftime('%F %T')} 同步开始 ===\n")
-    start = time.time()
-
-    # 阶段 1: 仓库同步 (后续任务依赖它)
-    task_repo_sync()
-    print()
-
-    # 阶段 2: 其余任务并行
-    tasks = [task_session_sync]
-    if len(tasks) > 1:
-        with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
-            futures = {pool.submit(t): t.__name__ for t in tasks}
-            for future in as_completed(futures):
-                future.result()
-    else:
-        task_session_sync()
-
-    elapsed = time.time() - start
-    print(f"\n=== 同步完成 (耗时 {elapsed:.1f}s) ===")
-
-
-def cmd_status() -> None:
-    print("--- repo-sync ---")
-    count = sum(1 for _ in SYNC_DIR.iterdir()) if SYNC_DIR.exists() else 0
-    print(f"  同步目录: {SYNC_DIR} ({count} 个条目)")
-
-    print("\n--- session-sync ---")
-    session_dir = SYNC_DIR / "claude-session-sync"
-    if session_dir.exists():
-        proc = subprocess.run(["make", "-s", "status"], cwd=str(session_dir), capture_output=True, text=True)
-        print(f"  {proc.stdout.strip()}" if proc.returncode == 0 else "  (无法获取)")
-    else:
-        print("  claude-session-sync 未克隆")
-
-
-def usage() -> None:
-    print("用法: ops <command>\n")
-    print("命令:")
-    print("  sync     同步所有仓库 + Claude 会话")
-    print("  status   查看同步状态")
-
-
-def main() -> None:
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
-    if cmd == "sync":
-        cmd_sync()
-    elif cmd == "status":
-        cmd_status()
-    else:
-        usage()
-
-
-if __name__ == "__main__":
-    main()
+case "${1:-help}" in
+    sync)   cmd_sync ;;
+    status) cmd_status ;;
+    *)      echo "用法: ops <sync|status>" ;;
+esac
