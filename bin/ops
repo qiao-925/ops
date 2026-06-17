@@ -9,14 +9,7 @@ COMMANDS=(
     "make -C $SYNC_DIR/claude-session-sync sync"
 )
 
-cmd_sync() {
-    for cmd in "${COMMANDS[@]}"; do
-        eval "$cmd"
-        echo ""
-    done
-}
-
-case "${1:-sync}" in
-    sync) cmd_sync ;;
-    *)    echo "用法: ops [sync]" ;;
-esac
+for cmd in "${COMMANDS[@]}"; do
+    eval "$cmd"
+    echo ""
+done
