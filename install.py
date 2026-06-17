@@ -4,8 +4,8 @@
 用法: curl -fsSL <url>/install.py | python3
 
 目录结构:
-  ~/.local/share/ops/          ops 仓库 (安装)
-  ~/.local/share/ops/repos/    数据仓库 (clone-faster 同步目标)
+  ~/.local/share/ops/          ops 安装
+  ~/.local/share/repos/        数据仓库 (与 ops 齐平，互不影响)
   ~/.local/bin/ops             全局命令链接
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 REPO = "qiao-925/ops"
 OPS_INSTALL_DIR = Path.home() / ".local" / "share" / "ops"
-DATA_DIR = OPS_INSTALL_DIR / "repos"
+DATA_DIR = Path.home() / ".local" / "share" / "repos"
 BIN_LINK = Path.home() / ".local" / "bin" / "ops"
 
 

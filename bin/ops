@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-SYNC_DIR = Path.home() / ".local" / "share" / "ops" / "repos"
+SYNC_DIR = Path.home() / ".local" / "share" / "repos"
 LOG_FILE = Path.home() / ".local" / "share" / "ops" / ".sync.log"
 CLONE_FASTER_URL = "https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py"
 
@@ -40,7 +40,7 @@ def task_repo_sync() -> tuple[bool, str]:
 
 def task_session_sync() -> tuple[bool, str]:
     """Claude 会话同步: make sync"""
-    session_dir = SYNC_DIR / "qiao-925" / "claude-session-sync"
+    session_dir = SYNC_DIR / "claude-session-sync"
     if not session_dir.exists():
         log("  [session-sync] ✗ claude-session-sync 未克隆")
         return False, "claude-session-sync 未克隆"
@@ -143,7 +143,7 @@ def cmd_status() -> None:
     log(f"  同步目录: {SYNC_DIR} ({count} 个条目)")
 
     log("\n--- session-sync ---")
-    session_dir = SYNC_DIR / "qiao-925" / "claude-session-sync"
+    session_dir = SYNC_DIR / "claude-session-sync"
     if session_dir.exists():
         proc = subprocess.run(["make", "-s", "status"], cwd=str(session_dir), capture_output=True, text=True)
         log(f"  {proc.stdout.strip()}" if proc.returncode == 0 else "  (无法获取)")

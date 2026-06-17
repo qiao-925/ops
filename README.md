@@ -32,7 +32,7 @@ ops sync
 
 ```
 ~/.local/share/ops/               ops 安装
-~/.local/share/ops/repos/         数据仓库
+~/.local/share/repos/             数据仓库 (齐平，互不影响)
 ~/.local/bin/ops                  全局命令
 ```
 
