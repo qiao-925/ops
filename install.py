@@ -29,16 +29,19 @@ def main() -> None:
     print()
 
     # 1. 克隆 ops 仓库
-    if OPS_INSTALL_DIR.exists():
+    ops_bin = OPS_INSTALL_DIR / "bin" / "ops"
+    if ops_bin.exists():
         log("ok", "ops 仓库已存在")
     else:
+        import shutil
+        if OPS_INSTALL_DIR.exists():
+            shutil.rmtree(OPS_INSTALL_DIR)
         OPS_INSTALL_DIR.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["gh", "repo", "clone", REPO, str(OPS_INSTALL_DIR)], check=True)
         log("ok", f"克隆 ops 仓库 → {OPS_INSTALL_DIR}")
 
     # 2. 创建全局命令链接
     BIN_LINK.parent.mkdir(parents=True, exist_ok=True)
-    ops_bin = OPS_INSTALL_DIR / "bin" / "ops"
     if BIN_LINK.exists() or BIN_LINK.is_symlink():
         BIN_LINK.unlink()
     BIN_LINK.symlink_to(ops_bin)
