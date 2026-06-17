@@ -7,7 +7,7 @@
 import shutil
 from pathlib import Path
 
-OPS_DIR = Path.home() / ".local" / "share" / "ops"
+OPS_INSTALL_DIR = Path.home() / ".local" / "share" / "ops"
 BIN_LINK = Path.home() / ".local" / "bin" / "ops"
 
 
@@ -26,10 +26,10 @@ def main() -> None:
     else:
         log("ok", "链接不存在，无需移除")
 
-    # 2. 删除 ops 仓库目录
-    if OPS_DIR.exists():
-        shutil.rmtree(OPS_DIR)
-        log("ok", f"删除 {OPS_DIR}")
+    # 2. 删除 ops 安装目录
+    if OPS_INSTALL_DIR.exists():
+        shutil.rmtree(OPS_INSTALL_DIR)
+        log("ok", f"删除 {OPS_INSTALL_DIR}")
     else:
         log("ok", "目录不存在，无需删除")
 

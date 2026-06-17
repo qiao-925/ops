@@ -1,6 +1,182 @@
 #!/usr/bin/env python3
 """ops — 个人运维集成面板"""
 
-from ops.cli import main
+import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
 
-main()
+SYNC_DIR = Path.home() / ".local" / "share" / "ops" / "repos"
+LOG_FILE = Path.home() / ".local" / "share" / "ops" / ".sync.log"
+CLONE_FASTER_URL = "https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py"
+
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+def write_log(line: str) -> None:
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOG_FILE, "a") as f:
+        f.write(line + "\n")
+
+
+# --- 任务定义 ---
+
+def task_repo_sync() -> tuple[bool, str]:
+    """仓库同步: curl clone_faster.py | python3"""
+    log("  [repo-sync] 开始...")
+    proc = subprocess.run(
+        ["bash", "-c", f'curl -fsSL "{CLONE_FASTER_URL}" | python3 - --output "{SYNC_DIR}"'],
+        capture_output=True, text=True,
+    )
+    summary = proc.stdout.strip().split("\n")[-1] if proc.stdout.strip() else ""
+    ok = proc.returncode == 0
+    log(f"  [repo-sync] {'✓' if ok else '✗'} {summary or ('完成' if ok else f'失败 exit={proc.returncode}')}")
+    return ok, summary
+
+
+def task_session_sync() -> tuple[bool, str]:
+    """Claude 会话同步: make sync"""
+    session_dir = SYNC_DIR / "qiao-925" / "claude-session-sync"
+    if not session_dir.exists():
+        log("  [session-sync] ✗ claude-session-sync 未克隆")
+        return False, "claude-session-sync 未克隆"
+
+    log("  [session-sync] 开始...")
+    proc = subprocess.run(
+        ["make", "sync"],
+        cwd=str(session_dir),
+        capture_output=True, text=True,
+    )
+    output = proc.stderr.strip() or proc.stdout.strip()
+    summary = ""
+    for line in output.split("\n"):
+        if any(kw in line.lower() for kw in ["同步", "sync", "commit", "push", "already up to date"]):
+            summary = line.strip()
+            break
+
+    ok = proc.returncode == 0
+    log(f"  [session-sync] {'✓' if ok else '✗'} {summary or ('完成' if ok else f'失败 exit={proc.returncode}')}")
+    return ok, summary
+
+
+# --- 命令 ---
+
+def cmd_sync() -> None:
+    ts = datetime.now().strftime("%F %T")
+    log(f"=== {ts} 同步开始 ===")
+    write_log(f"sync-start: {ts}")
+    start = time.time()
+
+    # 阶段 1: 仓库同步 (必须先完成，后续任务依赖它)
+    ok, summary = task_repo_sync()
+    write_log(f"[repo-sync] {datetime.now().strftime('%F %T')} status={'ok' if ok else 'fail'} summary={summary}")
+
+    # 阶段 2: 其余任务并行
+    tasks = [task_session_sync]
+    if len(tasks) > 1:
+        results = {}
+        with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+            futures = {pool.submit(t): t.__name__ for t in tasks}
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    results[name] = future.result()
+                except Exception as exc:
+                    results[name] = (False, f"异常: {exc}")
+        for name, (ok, summary) in results.items():
+            write_log(f"[{name}] {datetime.now().strftime('%F %T')} status={'ok' if ok else 'fail'} summary={summary}")
+    else:
+        # 只有一个后续任务，直接跑
+        ok2, summary2 = task_session_sync()
+        write_log(f"[session-sync] {datetime.now().strftime('%F %T')} status={'ok' if ok2 else 'fail'} summary={summary2}")
+
+    elapsed = time.time() - start
+    ts = datetime.now().strftime("%F %T")
+    write_log(f"sync-end: {ts}")
+    log(f"\n=== 同步完成 (耗时 {elapsed:.1f}s) ===")
+
+
+def cmd_status() -> None:
+    import re
+
+    log("===== 同步状态 =====\n")
+
+    # 最近同步记录
+    log("--- 最近同步记录 ---")
+    if LOG_FILE.exists() and LOG_FILE.stat().st_size > 0:
+        for line in LOG_FILE.read_text().strip().split("\n")[-20:]:
+            log(f"  {line}")
+    else:
+        log("  (暂无记录)")
+    log("")
+
+    # 同步摘要
+    log("--- 同步摘要 ---")
+    if LOG_FILE.exists() and LOG_FILE.stat().st_size > 0:
+        text = LOG_FILE.read_text()
+        starts = re.findall(r"sync-start: (.+)", text)
+        ends = re.findall(r"sync-end: (.+)", text)
+        if ends:
+            last = ends[-1]
+            try:
+                dt = datetime.strptime(last, "%Y-%m-%d %H:%M:%S")
+                ago = int((datetime.now() - dt).total_seconds())
+                if ago < 60:
+                    ago_str = f"{ago}秒"
+                elif ago < 3600:
+                    ago_str = f"{ago // 60}分"
+                else:
+                    ago_str = f"{ago // 3600}时{(ago % 3600) // 60}分"
+                log(f"  上次同步: {last} ({ago_str}前)")
+            except ValueError:
+                log(f"  上次同步: {last}")
+        log(f"  总次数: {len(starts)}")
+    log("")
+
+    # 任务状态
+    log("--- repo-sync ---")
+    count = sum(1 for _ in SYNC_DIR.iterdir()) if SYNC_DIR.exists() else 0
+    log(f"  同步目录: {SYNC_DIR} ({count} 个条目)")
+
+    log("\n--- session-sync ---")
+    session_dir = SYNC_DIR / "qiao-925" / "claude-session-sync"
+    if session_dir.exists():
+        proc = subprocess.run(["make", "-s", "status"], cwd=str(session_dir), capture_output=True, text=True)
+        log(f"  {proc.stdout.strip()}" if proc.returncode == 0 else "  (无法获取)")
+    else:
+        log("  claude-session-sync 未克隆")
+
+
+def cmd_log() -> None:
+    if LOG_FILE.exists() and LOG_FILE.stat().st_size > 0:
+        print(LOG_FILE.read_text())
+    else:
+        print("(空)")
+
+
+def usage() -> None:
+    log("用法: ops <command>\n")
+    log("命令:")
+    log("  sync     同步所有仓库 + Claude 会话")
+    log("  status   查看同步状态")
+    log("  log      查看完整同步日志")
+
+
+def main() -> None:
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
+    if cmd == "sync":
+        cmd_sync()
+    elif cmd == "status":
+        cmd_status()
+    elif cmd == "log":
+        cmd_log()
+    else:
+        usage()
+
+
+if __name__ == "__main__":
+    main()
