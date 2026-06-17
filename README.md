@@ -1,55 +1,74 @@
 
 # ops
 
-所有仓库 + Claude 会话的统一调度入口。
+个人运维集成面板 — 批量调度独立运维任务，全部并行执行。
+
+## 设计原则
+
+- **ops = 调度层** — 只负责发现任务、并行执行、聚合展示。不包含任何领域逻辑。
+- **子任务完全独立** — 每个任务通过 CLI (subprocess) 调用，零代码依赖，可单独使用。
+- **插件化** — 新增任务 = 往 `ops/tasks/` 丢一个文件，自动发现、自动并行。
 
 ## 安装
-
-一行命令，无需 clone 仓库：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.sh | bash
 ```
 
-这会完成：
-- 克隆 ops 仓库到 `~/.local/share/ops`
-- 创建 `~/.local/bin/ops` 全局命令链接
-- 确保 `~/.local/bin` 在 PATH 中
+或直接用 Python：
 
-> curl | bash 是分发层——不需要理解内部，执行即完成。
+```bash
+curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.py | python3
+```
+
+## 用法
+
+```bash
+ops sync       # 并行执行所有同步任务
+ops status     # 查看同步状态和各任务状态
+ops log        # 查看完整同步日志
+ops tasks      # 列出所有已注册任务
+```
+
+## 架构
+
+```
+ops (Python, 集成面板)
+├── 调度: 并行执行 N 个独立任务
+├── 聚合: 统一的日志、状态展示
+└── 入口: ops sync / ops status / ops tasks
+
+  ↓ subprocess 调用 (零代码依赖)
+
+tasks/
+  repo-sync      → curl clone_faster.py | python3 (独立 CLI)
+  session-sync   → make -C claude-session-sync sync (独立 CLI)
+  ...            → 更多独立任务
+```
+
+## 新增任务
+
+在 `ops/tasks/` 下新建一个 `.py` 文件：
+
+```python
+from ops.task import Task, TaskContext, TaskResult
+
+class MyTask(Task):
+    name = "my-task"
+    description = "我的自定义任务"
+
+    def run(self, ctx: TaskContext) -> TaskResult:
+        # 执行逻辑，通过 subprocess 调用外部 CLI
+        return TaskResult(success=True, summary="完成")
+
+    def status(self, ctx: TaskContext) -> str:
+        return "状态信息"
+```
+
+自动发现，无需修改任何其他文件。
 
 ## 卸载
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/uninstall.sh | bash
 ```
-
-## 用法
-
-`ops` 已链接到 `~/.local/bin/ops`（全局可用），从任意目录执行：
-
-```bash
-ops sync     # 仓库更新 + Claude 会话同步
-ops status   # 查看同步状态、记录、统计
-ops log      # 查看完整同步日志
-ops help     # 查看帮助
-```
-
-### 架构
-
-```
-ops sync
- ├── 1/2 仓库同步
- │    └── curl clone_faster.py | python3 - --output ~/.local/share/ops/repos
- │        ├── git clone --depth 1 (首次)
- │        └── git fetch --depth 1   (后续增量)
- └── 2/2 Claude 会话同步
-      └── make -C ~/.local/share/ops/repos/qiao-925/claude-session-sync sync
-           ├── git pull --rebase
-           ├── cp -ru 双向同步 ~/.claude/projects/
-           └── git commit + push (有变化时)
-```
-
-仓库数据统一存放在 `~/.local/share/ops/repos/`，可通过 `OPS_SYNC_DIR` 环境变量自定义。
-
-同步日志记录在 `.sync.log`，包含每次的开始/结束时间和各步骤退出码。
