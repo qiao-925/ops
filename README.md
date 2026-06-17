@@ -9,14 +9,13 @@
 curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.py | python3
 ```
 
-已有旧版本会自动卸载后重装，无需手动处理。
+已有旧版本会自动卸载后重装。
 
 ## 用法
 
 ```bash
 ops sync     # 同步所有仓库 + Claude 会话
 ops status   # 查看同步状态
-ops log      # 查看完整同步日志
 ```
 
 ## 架构
@@ -27,18 +26,12 @@ ops sync
  └── 2. Claude 会话同步 (claude-session-sync)
 ```
 
-所有任务通过 subprocess 调用外部 CLI，零代码依赖。新增任务只需在 `bin/ops` 中加一个函数。
+所有任务通过 subprocess 调用外部 CLI，零代码依赖。
 
 ## 目录
 
 ```
 ~/.local/share/ops/          ops 安装
-~/.local/share/repos/        数据仓库 (与 ops 齐平，互不影响)
+~/.local/share/repos/        数据仓库 (齐平，互不影响)
 ~/.local/bin/ops             全局命令
-```
-
-## 卸载
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/uninstall.py | python3
 ```
