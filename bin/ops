@@ -1,41 +1,22 @@
 #!/usr/bin/env bash
-# ops — 任务聚合平台，纯透传
+# ops — 任务聚合平台
 set -euo pipefail
 
 SYNC_DIR="${OPS_SYNC_DIR:-$HOME/.local/share/repos}"
 
-# --- 任务定义 (新增任务在这里加函数) ---
-
-repo_sync()     { curl -fsSL https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py | python3 - --output "$SYNC_DIR"; }
-repo_status()   { echo "$SYNC_DIR ($(ls "$SYNC_DIR" 2>/dev/null | wc -l) 个条目)"; }
-
-session_sync()  { make -C "$SYNC_DIR/claude-session-sync" sync; }
-session_status(){ make -s -C "$SYNC_DIR/claude-session-sync" status; }
-
-# --- 任务注册 ---
-SYNC_TASKS=(repo_sync session_sync)
-STATUS_TASKS=(repo_status session_status)
-
-# --- 执行 ---
+COMMANDS=(
+    "curl -fsSL https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py | python3 - --output $SYNC_DIR"
+    "make -C $SYNC_DIR/claude-session-sync sync"
+)
 
 cmd_sync() {
-    for fn in "${SYNC_TASKS[@]}"; do
-        echo "=== ${fn%_*}-sync ==="
-        $fn
+    for cmd in "${COMMANDS[@]}"; do
+        eval "$cmd"
         echo ""
     done
 }
 
-cmd_status() {
-    for fn in "${STATUS_TASKS[@]}"; do
-        echo "--- ${fn%_*} ---"
-        $fn
-        echo ""
-    done
-}
-
-case "${1:-help}" in
-    sync)   cmd_sync ;;
-    status) cmd_status ;;
-    *)      echo "用法: ops <sync|status>" ;;
+case "${1:-sync}" in
+    sync) cmd_sync ;;
+    *)    echo "用法: ops [sync]" ;;
 esac
