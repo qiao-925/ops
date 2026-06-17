@@ -3,11 +3,13 @@
 
 个人运维集成面板 — 一个命令调度所有运维任务。
 
-## 安装
+## 安装 / 重装
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/qiao-925/ops/main/install.py | python3
 ```
+
+已有旧版本会自动卸载后重装，无需手动处理。
 
 ## 用法
 
@@ -21,19 +23,18 @@ ops log      # 查看完整同步日志
 
 ```
 ops sync
- ├── 1. 仓库同步 (clone-faster)
- │    └── 完成后才能执行后续任务
+ ├── 1. 仓库同步 (clone-faster)     ← 必须先完成
  └── 2. Claude 会话同步 (claude-session-sync)
 ```
 
-所有任务通过 subprocess 调用外部 CLI，零代码依赖。
+所有任务通过 subprocess 调用外部 CLI，零代码依赖。新增任务只需在 `bin/ops` 中加一个函数。
 
 ## 目录
 
 ```
-~/.local/share/ops/               ops 安装
-~/.local/share/repos/             数据仓库 (齐平，互不影响)
-~/.local/bin/ops                  全局命令
+~/.local/share/ops/          ops 安装
+~/.local/share/repos/        数据仓库 (与 ops 齐平，互不影响)
+~/.local/bin/ops             全局命令
 ```
 
 ## 卸载
