@@ -1,15 +1,17 @@
-#!/usr/bin/env bash
-# ops — 任务聚合平台
-set -euo pipefail
+#!/usr/bin/env python3
+"""ops — 任务聚合平台"""
 
-SYNC_DIR="${OPS_SYNC_DIR:-$HOME/.local/share/repos}"
+import subprocess
+import sys
+from pathlib import Path
 
-COMMANDS=(
-    "curl -fsSL https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py | python3 - --output $SYNC_DIR"
-    "make -C $SYNC_DIR/claude-session-sync sync"
-)
+SYNC_DIR = Path.home() / ".local" / "share" / "repos"
 
-for cmd in "${COMMANDS[@]}"; do
-    eval "$cmd"
-    echo ""
-done
+COMMANDS = [
+    f'curl -fsSL https://raw.githubusercontent.com/qiao-925/clone-faster/main/clone_faster.py | python3 - --output {SYNC_DIR}',
+    f'make -C {SYNC_DIR}/claude-session-sync sync',
+]
+
+for cmd in COMMANDS:
+    subprocess.run(cmd, shell=True)
+    print()
